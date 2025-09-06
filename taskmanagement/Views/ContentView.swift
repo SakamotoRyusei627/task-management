@@ -11,6 +11,13 @@ struct Todo: Identifiable, Hashable, Codable {
     var id = UUID()
     var title: String
     var isDone: Bool = false
+    var isToday: Bool = false
+}
+
+private enum ListFilter: String, CaseIterable, Identifiable, Codable {
+    case all = "すべて"
+    case today = "今日"
+    var id: String { rawValue }
 }
 
 class TodoStore: ObservableObject {
@@ -44,40 +51,77 @@ struct ContentView: View {
     @StateObject private var store = TodoStore()
     @State private var newTodo = ""
     @State private var showAddSheet = false
-    private var pendingIndices: [Int] { store.todos.indices.filter { !store.todos[$0].isDone } }
-    private var doneIndices: [Int] { store.todos.indices.filter { store.todos[$0].isDone } }
+    @State private var filter: ListFilter = .all
+
+    // インデックスを使って Binding を保ったままフィルタするヘルパー
+    private var filteredPendingIndices: [Int] {
+        store.todos.indices.filter { i in
+            let t = store.todos[i]
+            let passesFilter = (filter == .all) || t.isToday
+            return passesFilter && !t.isDone
+        }
+    }
+    private var filteredDoneIndices: [Int] {
+        store.todos.indices.filter { i in
+            let t = store.todos[i]
+            let passesFilter = (filter == .all) || t.isToday
+            return passesFilter && t.isDone
+        }
+    }
     var body: some View {
         NavigationStack {
             List {
-                if store.todos.isEmpty {
-                    EmptyStateView()
+                if filteredPendingIndices.isEmpty && filteredDoneIndices.isEmpty {
+                    EmptyStateView(title: filter == .today ? "今日のタスクはありません" : "はじめてのタスクを追加しよう")
                 } else {
-                    ForEach(pendingIndices, id: \.self) { i in
-                        NavigationLink(value: store.todos[i]) {
-                            TodoRow(todo: $store.todos[i])
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            Button {
-                                withAnimation(.easeInOut) { store.todos[i].isDone.toggle() }
-                            } label: {
-                                Label("完了", systemImage: "checkmark")
+                    // 予定（未完了）
+                    Section(filter == .today ? "今日の予定" : "予定") {
+                        ForEach(filteredPendingIndices, id: \.self) { i in
+                            NavigationLink(value: store.todos[i]) {
+                                TodoRow(todo: $store.todos[i])
                             }
-                            .tint(.green)
-                        }
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                withAnimation { _ = store.todos.remove(at: i) }
-                            } label: {
-                                Label("削除", systemImage: "trash")
+                            // 右スワイプ：完了
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button {
+                                    withAnimation(.easeInOut) { store.todos[i].isDone.toggle() }
+                                } label: {
+                                    Label("完了", systemImage: "checkmark")
+                                }
+                                .tint(.green)
+                                // 今日に入れる/外す
+                                if !store.todos[i].isToday {
+                                    Button {
+                                        withAnimation(.easeInOut) { store.todos[i].isToday = true }
+                                    } label: {
+                                        Label("今日", systemImage: "sun.max")
+                                    }
+                                    .tint(.orange)
+                                } else {
+                                    Button {
+                                        withAnimation(.easeInOut) { store.todos[i].isToday = false }
+                                    } label: {
+                                        Label("今日から外す", systemImage: "sun.min")
+                                    }
+                                    .tint(.gray)
+                                }
                             }
+                            // 左スワイプ：削除
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    withAnimation { _ = store.todos.remove(at: i) }
+                                } label: {
+                                    Label("削除", systemImage: "trash")
+                                }
+                            }
+                        }
+                        .onMove { from, to in
+                            withAnimation { store.todos.move(fromOffsets: from, toOffset: to) }
                         }
                     }
-                    .onMove { from, to in
-                        withAnimation { store.todos.move(fromOffsets: from, toOffset: to) }
-                    }
-                    if !doneIndices.isEmpty {
-                        Section("完了") {
-                            ForEach(doneIndices, id: \.self) { i in
+                    // 完了セクション（存在する場合のみ）
+                    if !filteredDoneIndices.isEmpty {
+                        Section(filter == .today ? "今日の完了" : "完了") {
+                            ForEach(filteredDoneIndices, id: \.self) { i in
                                 NavigationLink(value: store.todos[i]) {
                                     TodoRow(todo: $store.todos[i])
                                 }
@@ -88,6 +132,21 @@ struct ContentView: View {
                                         Label("未完了に戻す", systemImage: "arrow.uturn.left")
                                     }
                                     .tint(.orange)
+                                    if store.todos[i].isToday {
+                                        Button {
+                                            withAnimation(.easeInOut) { store.todos[i].isToday = false }
+                                        } label: {
+                                            Label("今日から外す", systemImage: "sun.min")
+                                        }
+                                        .tint(.gray)
+                                    } else {
+                                        Button {
+                                            withAnimation(.easeInOut) { store.todos[i].isToday = true }
+                                        } label: {
+                                            Label("今日", systemImage: "sun.max")
+                                        }
+                                        .tint(.orange)
+                                    }
                                 }
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) {
@@ -102,22 +161,32 @@ struct ContentView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("リスト")
+            .navigationTitle("タスク")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { EditButton() }
+                ToolbarItem(placement: .principal) {
+                    Picker("リスト", selection: $filter) {
+                        ForEach(ListFilter.allCases) { f in
+                            Text(f.rawValue).tag(f)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 260)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showAddSheet = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
                     }
+                    .accessibilityLabel("新規タスク")
                 }
             }
             .sheet(isPresented: $showAddSheet) {
                 AddTodoView { title in
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        store.todos.append(Todo(title: title))
+                        store.todos.append(Todo(title: title, isToday: filter == .today))
                     }
                 }
             }
