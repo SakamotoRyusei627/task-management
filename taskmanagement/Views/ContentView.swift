@@ -152,7 +152,7 @@ struct ContentView: View {
                     EmptyStateView(title: filter == .today ? "今日のタスクはありません" : "はじめてのタスクを追加しよう")
                 } else {
                     // 予定（未完了）
-                    Section(filter == .today ? "今日の予定" : "予定") {
+                    Section("予定") {
                         ForEach(filteredPendingIndices, id: \.self) { i in
                             NavigationLink {
                                 TodoDetailView(todo: $store.todos[i])
@@ -230,25 +230,33 @@ struct ContentView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("タスク")
+            .navigationTitle(filter == .all ? "すべて" : "今日")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Picker("リスト", selection: $filter) {
-                        ForEach(ListFilter.allCases) { f in
-                            Text(f.rawValue).tag(f)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 260)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    FilterButton(
+                        filter: .all,
+                        activeIcon: "tray.full.fill",
+                        inactiveIcon: "tray.full",
+                        accessibilityLabel: "すべて",
+                        current: $filter
+                    )
+                    Spacer(minLength: 32)
                     Button {
                         showAddSheet = true
                     } label: {
                         Image(systemName: "plus.circle.fill")
+                            .font(.title)
                     }
                     .accessibilityLabel("新規タスク")
+                    Spacer(minLength: 32)
+                    FilterButton(
+                        filter: .today,
+                        activeIcon: "sun.max.fill",
+                        inactiveIcon: "sun.max",
+                        accessibilityLabel: "今日",
+                        current: $filter
+                    )
                 }
             }
             .sheet(isPresented: $showAddSheet) {
@@ -414,6 +422,34 @@ struct TodoDetailView: View {
         formatter.timeStyle = .short
         return formatter
     }()
+}
+
+private struct FilterButton: View {
+    let filter: ListFilter
+    let activeIcon: String
+    let inactiveIcon: String
+    let accessibilityLabel: String
+    @Binding var current: ListFilter
+
+    var isActive: Bool { current == filter }
+
+    var body: some View {
+        Button {
+            current = filter
+        } label: {
+            Image(systemName: isActive ? activeIcon : inactiveIcon)
+                .font(.title2)
+                .foregroundStyle(isActive ? Color.accentColor : .secondary)
+                .padding(10)
+                .background(
+                    Circle()
+                        .fill(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("\(accessibilityLabel)のタスクを表示")
+    }
 }
 
 fileprivate struct DetailField<Content: View>: View {
