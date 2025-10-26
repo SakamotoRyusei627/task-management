@@ -112,7 +112,7 @@ struct ContentView: View {
 
     // インデックスを使って Binding を保ったままフィルタするヘルパー
     private var filteredPendingIndices: [Int] {
-        store.todos.indices.filter { i in
+        let indices = store.todos.indices.filter { i in
             let t = store.todos[i]
             let matchesFilter: Bool = {
                 switch filter {
@@ -124,9 +124,12 @@ struct ContentView: View {
             }()
             return matchesFilter && !t.isDone
         }
+        return indices.sorted { lhs, rhs in
+            store.todos[lhs].dueDate < store.todos[rhs].dueDate
+        }
     }
     private var filteredDoneIndices: [Int] {
-        store.todos.indices.filter { i in
+        let indices = store.todos.indices.filter { i in
             let t = store.todos[i]
             let matchesFilter: Bool = {
                 switch filter {
@@ -137,6 +140,9 @@ struct ContentView: View {
                 }
             }()
             return matchesFilter && t.isDone
+        }
+        return indices.sorted { lhs, rhs in
+            store.todos[lhs].dueDate < store.todos[rhs].dueDate
         }
     }
     var body: some View {
@@ -260,19 +266,70 @@ struct ContentView: View {
 struct TodoRow: View {
     @Binding var todo: Todo
 
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(todo.isDone ? Color.green : Color.gray)
-                .imageScale(.large)
-                .onTapGesture { withAnimation(.easeInOut) { todo.isDone.toggle() } }
-
-            Text(todo.title)
-                .strikethrough(todo.isDone)
-                .foregroundStyle(todo.isDone ? .secondary : .primary)
-                .animation(.easeInOut(duration: 0.2), value: todo.isDone)
-            Spacer()
+    private var estimatedTimeText: String {
+        let hours = todo.estimatedHours
+        let minutes = todo.estimatedMinutes
+        switch (hours, minutes) {
+        case (0, 0):
+            return "0分"
+        case (_, 0):
+            return "\(hours)時間"
+        case (0, _):
+            return "\(minutes)分"
+        default:
+            return "\(hours)時間 \(minutes)分"
         }
+    }
+
+    private var dueDateDescription: String {
+        TodoDetailView.dateFormatter.string(from: todo.dueDate)
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                Image(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(todo.isDone ? Color.green : Color.gray)
+                    .imageScale(.large)
+                    .onTapGesture { withAnimation(.easeInOut) { todo.isDone.toggle() } }
+                Spacer(minLength: 0)
+            }
+            .frame(width: 32)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(todo.title)
+                    .font(.headline)
+                    .strikethrough(todo.isDone)
+                    .foregroundStyle(todo.isDone ? .secondary : .primary)
+                    .animation(.easeInOut(duration: 0.2), value: todo.isDone)
+
+                HStack(alignment: .center, spacing: 12) {
+                    Label {
+                        Text(estimatedTimeText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    } icon: {
+                        Image(systemName: "timer")
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Label {
+                        Text(dueDateDescription)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    } icon: {
+                        Image(systemName: "calendar")
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(todo.dueDate < Calendar.current.startOfDay(for: Date()) ? .red : .secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
 }
@@ -342,7 +399,7 @@ struct TodoDetailView: View {
         }
     }
 
-    private static let dateFormatter: DateFormatter = {
+    fileprivate static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateStyle = .medium
@@ -350,7 +407,7 @@ struct TodoDetailView: View {
         return formatter
     }()
 
-    private static let dateTimeFormatter: DateFormatter = {
+    fileprivate static let dateTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateStyle = .medium
@@ -359,7 +416,7 @@ struct TodoDetailView: View {
     }()
 }
 
-private struct DetailField<Content: View>: View {
+fileprivate struct DetailField<Content: View>: View {
     let title: String
     @ViewBuilder var content: () -> Content
 
