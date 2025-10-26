@@ -121,9 +121,6 @@ struct ContentView: View {
                                 }
                             }
                         }
-                        .onMove { from, to in
-                            withAnimation { store.todos.move(fromOffsets: from, toOffset: to) }
-                        }
                     }
                     // 完了セクション（存在する場合のみ）
                     if !filteredDoneIndices.isEmpty {
@@ -165,7 +162,6 @@ struct ContentView: View {
             .navigationTitle("タスク")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { EditButton() }
                 ToolbarItem(placement: .principal) {
                     Picker("リスト", selection: $filter) {
                         ForEach(ListFilter.allCases) { f in
