@@ -91,7 +91,11 @@ struct ContentView: View {
                     // 予定（未完了）
                     Section(filter == .today ? "今日の予定" : "予定") {
                         ForEach(filteredPendingIndices, id: \.self) { i in
-                            TodoRow(todo: $store.todos[i])
+                            NavigationLink {
+                                EditTodoView(todo: $store.todos[i])
+                            } label: {
+                                TodoRow(todo: $store.todos[i])
+                            }
                             // 右スワイプ：今日に移動（すべての一覧のみ）
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 if filter == .all {
@@ -126,7 +130,11 @@ struct ContentView: View {
                     if !filteredDoneIndices.isEmpty {
                         Section(filter == .today ? "今日の完了" : "完了") {
                             ForEach(filteredDoneIndices, id: \.self) { i in
-                                TodoRow(todo: $store.todos[i])
+                                NavigationLink {
+                                    EditTodoView(todo: $store.todos[i])
+                                } label: {
+                                    TodoRow(todo: $store.todos[i])
+                                }
                                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                     if filter == .all {
                                         Button {
@@ -209,6 +217,44 @@ struct TodoRow: View {
             Spacer()
         }
         .contentShape(Rectangle())
+    }
+}
+
+struct EditTodoView: View {
+    @Binding var todo: Todo
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String = ""
+    @State private var hasLoadedInitialValues = false
+
+    var body: some View {
+        Form {
+            Section("タイトル") {
+                TextField("タスク名を入力", text: $title)
+                    .autocorrectionDisabled()
+            }
+        }
+        .navigationTitle("タスクを編集")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("保存") { saveChanges() }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .onAppear {
+            guard !hasLoadedInitialValues else { return }
+            title = todo.title
+            hasLoadedInitialValues = true
+        }
+    }
+
+    private func saveChanges() {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        withAnimation(.easeInOut) {
+            todo.title = trimmed
+        }
+        dismiss()
     }
 }
 
