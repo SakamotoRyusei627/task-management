@@ -149,7 +149,7 @@ struct ContentView: View {
                     Section(filter == .today ? "今日の予定" : "予定") {
                         ForEach(filteredPendingIndices, id: \.self) { i in
                             NavigationLink {
-                                EditTodoView(todo: $store.todos[i])
+                                TodoDetailView(todo: $store.todos[i])
                             } label: {
                                 TodoRow(todo: $store.todos[i])
                             }
@@ -188,7 +188,7 @@ struct ContentView: View {
                         Section(filter == .today ? "今日の完了" : "完了") {
                             ForEach(filteredDoneIndices, id: \.self) { i in
                                 NavigationLink {
-                                    EditTodoView(todo: $store.todos[i])
+                                    TodoDetailView(todo: $store.todos[i])
                                 } label: {
                                     TodoRow(todo: $store.todos[i])
                                 }
@@ -274,6 +274,111 @@ struct TodoRow: View {
             Spacer()
         }
         .contentShape(Rectangle())
+    }
+}
+
+struct TodoDetailView: View {
+    @Binding var todo: Todo
+    @State private var showEdit = false
+
+    private var estimatedTimeDescription: String {
+        let hours = todo.estimatedHours
+        let minutes = todo.estimatedMinutes
+        switch (hours, minutes) {
+        case (0, 0):
+            return "0分"
+        case (_, 0):
+            return "\(hours)時間"
+        case (0, _):
+            return "\(minutes)分"
+        default:
+            return "\(hours)時間 \(minutes)分"
+        }
+    }
+
+    private var detailsText: String {
+        let trimmed = todo.details.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "未入力" : trimmed
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                DetailField(title: "タイトル") {
+                    Text(todo.title)
+                        .font(.body)
+                }
+                DetailField(title: "内容") {
+                    Text(detailsText)
+                        .foregroundStyle(detailsText == "未入力" ? .secondary : .primary)
+                        .multilineTextAlignment(.leading)
+                }
+                DetailField(title: "見積もり時間") {
+                    Text(estimatedTimeDescription)
+                }
+                DetailField(title: "期日") {
+                    Text(Self.dateFormatter.string(from: todo.dueDate))
+                }
+                DetailField(title: "作成日時") {
+                    Text(Self.dateTimeFormatter.string(from: todo.createdAt))
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 40)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("タスク詳細")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("編集") { showEdit = true }
+            }
+        }
+        .sheet(isPresented: $showEdit) {
+            NavigationStack {
+                EditTodoView(todo: $todo)
+            }
+        }
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
+    private static let dateTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+}
+
+private struct DetailField<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                content()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(.systemBackground))
+            )
+        }
     }
 }
 
