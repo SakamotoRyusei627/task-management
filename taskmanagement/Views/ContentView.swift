@@ -109,6 +109,8 @@ struct ContentView: View {
     @State private var newTodo = ""
     @State private var showAddSheet = false
     @State private var filter: ListFilter = .all
+    @AppStorage("hasSeenTaskOnboarding") private var hasSeenOnboarding = false
+    @State private var isOnboardingVisible = false
 
     // インデックスを使って Binding を保ったままフィルタするヘルパー
     private var filteredPendingIndices: [Int] {
@@ -147,52 +149,13 @@ struct ContentView: View {
     }
     var body: some View {
         NavigationStack {
-            List {
-                if filteredPendingIndices.isEmpty && filteredDoneIndices.isEmpty {
-                    EmptyStateView(title: filter == .today ? "今日のタスクはありません" : "はじめてのタスクを追加しよう")
-                } else {
-                    // 予定（未完了）
-                    Section("予定") {
-                        ForEach(filteredPendingIndices, id: \.self) { i in
-                            NavigationLink {
-                                TodoDetailView(todo: $store.todos[i])
-                            } label: {
-                                TodoRow(todo: $store.todos[i])
-                            }
-                            // 右スワイプ：今日に移動（すべての一覧のみ）
-                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                if filter == .all {
-                                    Button {
-                                        withAnimation(.easeInOut) { store.todos[i].isToday = true }
-                                    } label: {
-                                        Label("今日", systemImage: "sun.max")
-                                    }
-                                    .tint(.orange)
-                                }
-                            }
-                            // 左スワイプ：削除 or すべてに戻す
-                            .swipeActions(edge: .trailing) {
-                                if filter == .today {
-                                    Button {
-                                        withAnimation(.easeInOut) { store.todos[i].isToday = false }
-                                    } label: {
-                                        Label("すべてに戻す", systemImage: "arrow.uturn.backward")
-                                    }
-                                    .tint(.gray)
-                                } else {
-                                    Button(role: .destructive) {
-                                        withAnimation { _ = store.todos.remove(at: i) }
-                                    } label: {
-                                        Label("削除", systemImage: "trash")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // 完了セクション（存在する場合のみ）
-                    if !filteredDoneIndices.isEmpty {
-                        Section(filter == .today ? "今日の完了" : "完了") {
-                            ForEach(filteredDoneIndices, id: \.self) { i in
+            ZStack {
+                List {
+                    if filteredPendingIndices.isEmpty && filteredDoneIndices.isEmpty {
+                        EmptyStateView(title: filter == .today ? "今日のタスクはありません" : "はじめてのタスクを追加しよう")
+                    } else {
+                        Section(filter == .today ? "今日の予定" : "予定") {
+                            ForEach(filteredPendingIndices, id: \.self) { i in
                                 NavigationLink {
                                     TodoDetailView(todo: $store.todos[i])
                                 } label: {
@@ -226,10 +189,54 @@ struct ContentView: View {
                                 }
                             }
                         }
+                        if !filteredDoneIndices.isEmpty {
+                            Section(filter == .today ? "今日の完了" : "完了") {
+                                ForEach(filteredDoneIndices, id: \.self) { i in
+                                    NavigationLink {
+                                        TodoDetailView(todo: $store.todos[i])
+                                    } label: {
+                                        TodoRow(todo: $store.todos[i])
+                                    }
+                                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                        if filter == .all {
+                                            Button {
+                                                withAnimation(.easeInOut) { store.todos[i].isToday = true }
+                                            } label: {
+                                                Label("今日", systemImage: "sun.max")
+                                            }
+                                            .tint(.orange)
+                                        }
+                                    }
+                                    .swipeActions(edge: .trailing) {
+                                        if filter == .today {
+                                            Button {
+                                                withAnimation(.easeInOut) { store.todos[i].isToday = false }
+                                            } label: {
+                                                Label("すべてに戻す", systemImage: "arrow.uturn.backward")
+                                            }
+                                            .tint(.gray)
+                                        } else {
+                                            Button(role: .destructive) {
+                                                withAnimation { _ = store.todos.remove(at: i) }
+                                            } label: {
+                                                Label("削除", systemImage: "trash")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+
+                if isOnboardingVisible {
+                    OnboardingOverlay {
+                        hasSeenOnboarding = true
+                        withAnimation(.easeInOut) { isOnboardingVisible = false }
                     }
                 }
             }
-            .listStyle(.insetGrouped)
             .navigationTitle(filter == .all ? "すべて" : "今日")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -265,6 +272,11 @@ struct ContentView: View {
                         store.todos.append(todo)
                     }
                 }
+            }
+        }
+        .onAppear {
+            if !hasSeenOnboarding {
+                withAnimation(.easeInOut) { isOnboardingVisible = true }
             }
         }
     }
@@ -422,6 +434,66 @@ struct TodoDetailView: View {
         formatter.timeStyle = .short
         return formatter
     }()
+}
+
+private struct OnboardingOverlay: View {
+    var onDismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+
+            VStack(spacing: 28) {
+                Text("タスクの操作を覚えよう")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                VStack(alignment: .leading, spacing: 18) {
+                    OnboardingPoint(icon: "arrow.right.circle", text: "右へスワイプしてタスクを「今日」に移動")
+                    OnboardingPoint(icon: "arrow.uturn.backward.circle", text: "左へスワイプして元に戻す／削除する")
+                    OnboardingPoint(icon: "square.and.pencil", text: "タスクをタップして詳細を確認・編集する")
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.white.opacity(0.9))
+                )
+
+                Button {
+                    onDismiss()
+                } label: {
+                    Text("はじめる")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 12)
+                        .background(
+                            Capsule()
+                                .fill(Color.accentColor)
+                        )
+                }
+            }
+            .padding(32)
+        }
+    }
+}
+
+private struct OnboardingPoint: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(Color.accentColor)
+                .font(.title3)
+            Text(text)
+                .foregroundStyle(.primary)
+                .font(.body)
+        }
+    }
 }
 
 private struct FilterButton: View {
