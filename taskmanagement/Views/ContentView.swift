@@ -382,69 +382,44 @@ private struct DetailField<Content: View>: View {
     }
 }
 
-struct EditTodoView: View {
-    @Binding var todo: Todo
-    @Environment(\.dismiss) private var dismiss
-    @State private var title: String = ""
-    @State private var hasLoadedInitialValues = false
+private struct TodoFormState: Equatable {
+    static let hourOptions = Array(0...12)
+    static let minuteOptions = [0, 15, 30, 45]
+
+    var title: String = ""
+    var details: String = ""
+    var estimatedHours: Int = 1
+    var estimatedMinutes: Int = 0
+    var dueDate: Date = Date()
+
+    init() {}
+
+    init(todo: Todo) {
+        self.title = todo.title
+        self.details = todo.details
+        self.estimatedHours = Self.hourOptions.contains(todo.estimatedHours) ? todo.estimatedHours : min(max(todo.estimatedHours, 0), Self.hourOptions.last ?? 12)
+        self.estimatedMinutes = Self.minuteOptions.contains(todo.estimatedMinutes) ? todo.estimatedMinutes : Self.minuteOptions.first ?? 0
+        self.dueDate = todo.dueDate
+    }
+}
+
+private struct TodoFormView: View {
+    @Binding var state: TodoFormState
 
     var body: some View {
         Form {
             Section("タイトル") {
-                TextField("タスク名を入力", text: $title)
+                TextField("例: 牛乳を買う", text: $state.title)
                     .autocorrectionDisabled()
             }
-        }
-        .navigationTitle("タスクを編集")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("保存") { saveChanges() }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .onAppear {
-            guard !hasLoadedInitialValues else { return }
-            title = todo.title
-            hasLoadedInitialValues = true
-        }
-    }
-
-    private func saveChanges() {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        withAnimation(.easeInOut) {
-            todo.title = trimmed
-        }
-        dismiss()
-    }
-}
-
-struct AddTodoView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var title: String = ""
-    @State private var details: String = ""
-    @State private var estimatedHours: Int = 1
-    @State private var estimatedMinutes: Int = 0
-    @State private var dueDate: Date = Date()
-    let defaultIsToday: Bool
-    var onSave: (Todo) -> Void
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("タイトル") {
-                    TextField("例: 牛乳を買う", text: $title)
-                        .autocorrectionDisabled()
-                }
-                Section("内容") {
-                    TextEditor(text: $details)
-                        .frame(minHeight: 120)
+            Section("内容") {
+                TextEditor(text: $state.details)
+                    .frame(minHeight: 120)
             }
             Section("見積もり時間") {
                 HStack {
-                    Picker("時間", selection: $estimatedHours) {
-                        ForEach(0..<13) { hour in
+                    Picker("時間", selection: $state.estimatedHours) {
+                        ForEach(TodoFormState.hourOptions, id: \.self) { hour in
                             Text("\(hour)時間").tag(hour)
                         }
                     }
@@ -453,8 +428,8 @@ struct AddTodoView: View {
                     .clipped()
                     .labelsHidden()
 
-                    Picker("分", selection: $estimatedMinutes) {
-                        ForEach([0, 15, 30, 45], id: \.self) { minute in
+                    Picker("分", selection: $state.estimatedMinutes) {
+                        ForEach(TodoFormState.minuteOptions, id: \.self) { minute in
                             Text("\(minute)分").tag(minute)
                         }
                     }
@@ -464,12 +439,64 @@ struct AddTodoView: View {
                     .labelsHidden()
                 }
             }
-                Section("期日") {
-                    DatePicker("期日", selection: $dueDate, displayedComponents: [.date])
-                        .datePickerStyle(.wheel)
-                        .environment(\.locale, Locale(identifier: "ja_JP"))
-                }
+            Section("期日") {
+                DatePicker("期日", selection: $state.dueDate, displayedComponents: [.date])
+                    .datePickerStyle(.wheel)
+                    .environment(\.locale, Locale(identifier: "ja_JP"))
             }
+        }
+    }
+}
+
+struct EditTodoView: View {
+    @Binding var todo: Todo
+    @Environment(\.dismiss) private var dismiss
+    @State private var formState = TodoFormState()
+    @State private var hasLoadedInitialValues = false
+
+    var body: some View {
+        TodoFormView(state: $formState)
+        .navigationTitle("タスクを編集")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("キャンセル") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("保存") { saveChanges() }
+                    .disabled(formState.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .onAppear {
+            guard !hasLoadedInitialValues else { return }
+            formState = TodoFormState(todo: todo)
+            hasLoadedInitialValues = true
+        }
+    }
+
+    private func saveChanges() {
+        let trimmed = formState.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        withAnimation(.easeInOut) {
+            todo.title = trimmed
+            todo.details = formState.details.trimmingCharacters(in: .whitespacesAndNewlines)
+            todo.estimatedHours = formState.estimatedHours
+            todo.estimatedMinutes = formState.estimatedMinutes
+            todo.dueDate = formState.dueDate
+        }
+        dismiss()
+    }
+}
+
+struct AddTodoView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var formState = TodoFormState()
+    let defaultIsToday: Bool
+    var onSave: (Todo) -> Void
+
+    var body: some View {
+        NavigationStack {
+            TodoFormView(state: $formState)
             .navigationTitle("新規タスク")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -479,25 +506,25 @@ struct AddTodoView: View {
                     Button("追加") {
                         save()
                     }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(formState.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .onAppear {
-                dueDate = Date()
+                formState = TodoFormState()
             }
         }
     }
 
     private func save() {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTitle = formState.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return }
-        let trimmedDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDetails = formState.details.trimmingCharacters(in: .whitespacesAndNewlines)
         let newTodo = Todo(
             title: trimmedTitle,
             details: trimmedDetails,
-            estimatedHours: estimatedHours,
-            estimatedMinutes: estimatedMinutes,
-            dueDate: dueDate,
+            estimatedHours: formState.estimatedHours,
+            estimatedMinutes: formState.estimatedMinutes,
+            dueDate: formState.dueDate,
             createdAt: Date(),
             isToday: defaultIsToday
         )
