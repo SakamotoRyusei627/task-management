@@ -57,15 +57,29 @@ struct ContentView: View {
     private var filteredPendingIndices: [Int] {
         store.todos.indices.filter { i in
             let t = store.todos[i]
-            let passesFilter = (filter == .all) || t.isToday
-            return passesFilter && !t.isDone
+            let matchesFilter: Bool = {
+                switch filter {
+                case .all:
+                    return !t.isToday
+                case .today:
+                    return t.isToday
+                }
+            }()
+            return matchesFilter && !t.isDone
         }
     }
     private var filteredDoneIndices: [Int] {
         store.todos.indices.filter { i in
             let t = store.todos[i]
-            let passesFilter = (filter == .all) || t.isToday
-            return passesFilter && t.isDone
+            let matchesFilter: Bool = {
+                switch filter {
+                case .all:
+                    return !t.isToday
+                case .today:
+                    return t.isToday
+                }
+            }()
+            return matchesFilter && t.isDone
         }
     }
     var body: some View {
@@ -78,31 +92,32 @@ struct ContentView: View {
                     Section(filter == .today ? "今日の予定" : "予定") {
                         ForEach(filteredPendingIndices, id: \.self) { i in
                             TodoRow(todo: $store.todos[i])
-                            // 右スワイプ：完了
+                            // 右スワイプ：今日に移動（すべての一覧のみ）
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                // 今日に入れる/外す
-                                if !store.todos[i].isToday {
+                                if filter == .all {
                                     Button {
                                         withAnimation(.easeInOut) { store.todos[i].isToday = true }
                                     } label: {
                                         Label("今日", systemImage: "sun.max")
                                     }
                                     .tint(.orange)
-                                } else {
+                                }
+                            }
+                            // 左スワイプ：削除 or すべてに戻す
+                            .swipeActions(edge: .trailing) {
+                                if filter == .today {
                                     Button {
                                         withAnimation(.easeInOut) { store.todos[i].isToday = false }
                                     } label: {
-                                        Label("今日から外す", systemImage: "sun.min")
+                                        Label("すべてに戻す", systemImage: "arrow.uturn.backward")
                                     }
                                     .tint(.gray)
-                                }
-                            }
-                            // 左スワイプ：削除
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    withAnimation { _ = store.todos.remove(at: i) }
-                                } label: {
-                                    Label("削除", systemImage: "trash")
+                                } else {
+                                    Button(role: .destructive) {
+                                        withAnimation { _ = store.todos.remove(at: i) }
+                                    } label: {
+                                        Label("削除", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
@@ -116,14 +131,7 @@ struct ContentView: View {
                             ForEach(filteredDoneIndices, id: \.self) { i in
                                 TodoRow(todo: $store.todos[i])
                                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                    if store.todos[i].isToday {
-                                        Button {
-                                            withAnimation(.easeInOut) { store.todos[i].isToday = false }
-                                        } label: {
-                                            Label("今日から外す", systemImage: "sun.min")
-                                        }
-                                        .tint(.gray)
-                                    } else {
+                                    if filter == .all {
                                         Button {
                                             withAnimation(.easeInOut) { store.todos[i].isToday = true }
                                         } label: {
@@ -133,10 +141,19 @@ struct ContentView: View {
                                     }
                                 }
                                 .swipeActions(edge: .trailing) {
-                                    Button(role: .destructive) {
-                                        withAnimation { _ = store.todos.remove(at: i) }
-                                    } label: {
-                                        Label("削除", systemImage: "trash")
+                                    if filter == .today {
+                                        Button {
+                                            withAnimation(.easeInOut) { store.todos[i].isToday = false }
+                                        } label: {
+                                            Label("すべてに戻す", systemImage: "arrow.uturn.backward")
+                                        }
+                                        .tint(.gray)
+                                    } else {
+                                        Button(role: .destructive) {
+                                            withAnimation { _ = store.todos.remove(at: i) }
+                                        } label: {
+                                            Label("削除", systemImage: "trash")
+                                        }
                                     }
                                 }
                             }
