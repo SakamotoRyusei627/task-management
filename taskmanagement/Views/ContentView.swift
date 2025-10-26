@@ -84,6 +84,7 @@ class TodoStore: ObservableObject {
         }
     }
     private let key = "todos_key"
+    private let seededKey = "hasSeededTutorialTodos"
     
     init() {
         load()
@@ -96,11 +97,46 @@ class TodoStore: ObservableObject {
     }
     
     private func load() {
-        if let data = UserDefaults.standard.data(forKey: key),
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: key),
            let decoded = try? JSONDecoder().decode([Todo].self, from: data) {
             self.todos = decoded
+        } else {
+            self.todos = []
         }
-        
+
+        if defaults.bool(forKey: seededKey) == false {
+            seedTutorialTodos()
+            defaults.set(true, forKey: seededKey)
+        }
+    }
+
+    private func seedTutorialTodos() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let upcoming = calendar.date(byAdding: .day, value: 1, to: today) ?? today
+
+        let allTutorial = Todo(
+            title: "右にスワイプすると今日やることのタスクに移動",
+            details: "タスクを右方向にスワイプして今日のタスクへ移動してみましょう。",
+            estimatedHours: 0,
+            estimatedMinutes: 0,
+            dueDate: upcoming,
+            createdAt: Date(),
+            isToday: false
+        )
+
+        let todayTutorial = Todo(
+            title: "左にスワイプするとすべてのタスクに移動",
+            details: "今日のタスクから左にスワイプして元の一覧へ戻してみましょう。",
+            estimatedHours: 0,
+            estimatedMinutes: 0,
+            dueDate: upcoming,
+            createdAt: Date(),
+            isToday: true
+        )
+
+        todos.insert(contentsOf: [allTutorial, todayTutorial], at: 0)
     }
 }
 
@@ -108,6 +144,7 @@ struct ContentView: View {
     @StateObject private var store = TodoStore()
     @State private var newTodo = ""
     @State private var showAddSheet = false
+    @State private var showSettings = false
     @State private var filter: ListFilter = .all
     @AppStorage("hasSeenTaskOnboarding") private var hasSeenOnboarding = false
     @State private var isOnboardingVisible = false
@@ -240,6 +277,14 @@ struct ContentView: View {
             .navigationTitle(filter == .all ? "すべて" : "今日")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                    }
+                    .accessibilityLabel("設定")
+                }
                 ToolbarItemGroup(placement: .bottomBar) {
                     FilterButton(
                         filter: .all,
@@ -273,6 +318,9 @@ struct ContentView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+            }
         }
         .onAppear {
             if !hasSeenOnboarding {
@@ -282,6 +330,39 @@ struct ContentView: View {
     }
 }
 
+
+struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("その他") {
+                    Button {
+                        if let url = URL(string: "https://rules-privacy-9a6dd.web.app/") {
+                            openURL(url)
+                        }
+                    } label: {
+                        HStack {
+                            Text("プライバシーポリシー / 利用規約")
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("設定")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
 
 struct TodoRow: View {
     @Binding var todo: Todo
