@@ -77,9 +77,7 @@ struct ContentView: View {
                     // 予定（未完了）
                     Section(filter == .today ? "今日の予定" : "予定") {
                         ForEach(filteredPendingIndices, id: \.self) { i in
-                            NavigationLink(value: store.todos[i]) {
-                                TodoRow(todo: $store.todos[i])
-                            }
+                            TodoRow(todo: $store.todos[i])
                             // 右スワイプ：完了
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                 Button {
@@ -122,9 +120,7 @@ struct ContentView: View {
                     if !filteredDoneIndices.isEmpty {
                         Section(filter == .today ? "今日の完了" : "完了") {
                             ForEach(filteredDoneIndices, id: \.self) { i in
-                                NavigationLink(value: store.todos[i]) {
-                                    TodoRow(todo: $store.todos[i])
-                                }
+                                TodoRow(todo: $store.todos[i])
                                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                     Button {
                                         withAnimation(.easeInOut) { store.todos[i].isDone.toggle() }
@@ -190,9 +186,6 @@ struct ContentView: View {
                     }
                 }
             }
-            .navigationDestination(for: Todo.self) { todo in
-                TodoDetailView(todo: todo)
-            }
         }
     }
 }
@@ -215,21 +208,6 @@ struct TodoRow: View {
             Spacer()
         }
         .contentShape(Rectangle())
-    }
-}
-
-struct TodoDetailView: View {
-    let todo: Todo
-    var body: some View {
-        VStack(spacing: 20) {
-            Text("Todoの詳細")
-                .font(.headline)
-            Text(todo.title)
-                .font(.largeTitle)
-            Text(todo.isDone ? "✅ 完了済み" : "⏳ 未完了")
-                .font(.title2)
-        }
-        .padding()
     }
 }
 
