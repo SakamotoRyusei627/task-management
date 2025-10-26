@@ -8,10 +8,67 @@
 import SwiftUI
 
 struct Todo: Identifiable, Hashable, Codable {
-    var id = UUID()
+    var id: UUID = UUID()
     var title: String
+    var details: String
+    var estimatedHours: Int
+    var estimatedMinutes: Int
+    var dueDate: Date
+    var createdAt: Date
     var isDone: Bool = false
     var isToday: Bool = false
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        details: String,
+        estimatedHours: Int,
+        estimatedMinutes: Int,
+        dueDate: Date,
+        createdAt: Date = Date(),
+        isDone: Bool = false,
+        isToday: Bool = false
+    ) {
+        self.id = id
+        self.title = title
+        self.details = details
+        self.estimatedHours = estimatedHours
+        self.estimatedMinutes = estimatedMinutes
+        self.dueDate = dueDate
+        self.createdAt = createdAt
+        self.isDone = isDone
+        self.isToday = isToday
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, details, estimatedHours, estimatedMinutes, dueDate, createdAt, isDone, isToday
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try container.decode(String.self, forKey: .title)
+        details = try container.decodeIfPresent(String.self, forKey: .details) ?? ""
+        estimatedHours = try container.decodeIfPresent(Int.self, forKey: .estimatedHours) ?? 0
+        estimatedMinutes = try container.decodeIfPresent(Int.self, forKey: .estimatedMinutes) ?? 0
+        dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate) ?? Date()
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        isDone = try container.decodeIfPresent(Bool.self, forKey: .isDone) ?? false
+        isToday = try container.decodeIfPresent(Bool.self, forKey: .isToday) ?? false
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(details, forKey: .details)
+        try container.encode(estimatedHours, forKey: .estimatedHours)
+        try container.encode(estimatedMinutes, forKey: .estimatedMinutes)
+        try container.encode(dueDate, forKey: .dueDate)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(isDone, forKey: .isDone)
+        try container.encode(isToday, forKey: .isToday)
+    }
 }
 
 private enum ListFilter: String, CaseIterable, Identifiable, Codable {
@@ -189,9 +246,9 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showAddSheet) {
-                AddTodoView { title in
+                AddTodoView(defaultIsToday: filter == .today) { todo in
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        store.todos.append(Todo(title: title, isToday: filter == .today))
+                        store.todos.append(todo)
                     }
                 }
             }
@@ -261,7 +318,12 @@ struct EditTodoView: View {
 struct AddTodoView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var title: String = ""
-    var onSave: (String) -> Void
+    @State private var details: String = ""
+    @State private var estimatedHours: Int = 1
+    @State private var estimatedMinutes: Int = 0
+    @State private var dueDate: Date = Date()
+    let defaultIsToday: Bool
+    var onSave: (Todo) -> Void
 
     var body: some View {
         NavigationStack {
@@ -269,6 +331,38 @@ struct AddTodoView: View {
                 Section("タイトル") {
                     TextField("例: 牛乳を買う", text: $title)
                         .autocorrectionDisabled()
+                }
+                Section("内容") {
+                    TextEditor(text: $details)
+                        .frame(minHeight: 120)
+            }
+            Section("見積もり時間") {
+                HStack {
+                    Picker("時間", selection: $estimatedHours) {
+                        ForEach(0..<13) { hour in
+                            Text("\(hour)時間").tag(hour)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(maxWidth: .infinity, maxHeight: 140)
+                    .clipped()
+                    .labelsHidden()
+
+                    Picker("分", selection: $estimatedMinutes) {
+                        ForEach([0, 15, 30, 45], id: \.self) { minute in
+                            Text("\(minute)分").tag(minute)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(maxWidth: .infinity, maxHeight: 140)
+                    .clipped()
+                    .labelsHidden()
+                }
+            }
+                Section("期日") {
+                    DatePicker("期日", selection: $dueDate, displayedComponents: [.date])
+                        .datePickerStyle(.wheel)
+                        .environment(\.locale, Locale(identifier: "ja_JP"))
                 }
             }
             .navigationTitle("新規タスク")
@@ -278,15 +372,32 @@ struct AddTodoView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("追加") {
-                        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !trimmed.isEmpty else { return }
-                        onSave(trimmed)
-                        dismiss()
+                        save()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+            .onAppear {
+                dueDate = Date()
+            }
         }
+    }
+
+    private func save() {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return }
+        let trimmedDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newTodo = Todo(
+            title: trimmedTitle,
+            details: trimmedDetails,
+            estimatedHours: estimatedHours,
+            estimatedMinutes: estimatedMinutes,
+            dueDate: dueDate,
+            createdAt: Date(),
+            isToday: defaultIsToday
+        )
+        onSave(newTodo)
+        dismiss()
     }
 }
 
