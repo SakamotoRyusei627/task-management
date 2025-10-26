@@ -80,12 +80,6 @@ struct ContentView: View {
                             TodoRow(todo: $store.todos[i])
                             // 右スワイプ：完了
                             .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                Button {
-                                    withAnimation(.easeInOut) { store.todos[i].isDone.toggle() }
-                                } label: {
-                                    Label("完了", systemImage: "checkmark")
-                                }
-                                .tint(.green)
                                 // 今日に入れる/外す
                                 if !store.todos[i].isToday {
                                     Button {
@@ -122,12 +116,6 @@ struct ContentView: View {
                             ForEach(filteredDoneIndices, id: \.self) { i in
                                 TodoRow(todo: $store.todos[i])
                                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                    Button {
-                                        withAnimation(.easeInOut) { store.todos[i].isDone.toggle() }
-                                    } label: {
-                                        Label("未完了に戻す", systemImage: "arrow.uturn.left")
-                                    }
-                                    .tint(.orange)
                                     if store.todos[i].isToday {
                                         Button {
                                             withAnimation(.easeInOut) { store.todos[i].isToday = false }
